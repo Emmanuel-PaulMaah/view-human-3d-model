@@ -50,7 +50,7 @@ scene.add(reticle);
 let avatar = null;
 
 // [13] Load your GLB model. Path must be reachable over HTTPS.
-new GLTFLoader().load('/assets/avatar.glb', (gltf) => {
+new GLTFLoader().load('./assets/avatar.glb', (gltf) => {
   avatar = gltf.scene;
   avatar.visible = false;              // hide until placed
   avatar.traverse(o => { if (o.isMesh) o.frustumCulled = false; }); // avoid popping if large
