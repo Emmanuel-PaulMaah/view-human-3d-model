@@ -20,7 +20,6 @@
     let reticle, hitTestSource = null, hitTestSourceRequested = false;
     let model = null;
 
-    init();
     function init() {
       // renderer
       renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -61,6 +60,8 @@
       // render loop
       renderer.setAnimationLoop(render);
     }
+
+    init();
 
     function render(timestamp, frame) {
       if (frame) {
