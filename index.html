@@ -50,17 +50,18 @@
     const viewer = document.getElementById('viewer');
     const enterAR = document.getElementById('enter-ar');
 
-    enterAR.addEventListener('click', async () => {
+    viewer.addEventListener('ar-status', (e) => {
+      console.log('ar-status:', e.detail.status, e.detail.reason);
+      if (e.detail.status === 'failed' && e.detail.reason) {
+        alert('AR failed: ' + e.detail.reason);
+
+    emterAR.addEventListener('click', () => {
       try {
-        const canActivate = await viewer.canActivateAR;
-        if (canActivate) {
-          viewer.activateAR();
-        } else {
-          alert('ar not available on this device/browser.\n(note: ios needs a .usdz to open ar quick look)');
-        }
+        if (viewer.canActivateAR) viewer.activateAR();
+        else alert('AR not available on this device/browser.');
       } catch (err) {
         console.error(err);
-        alert('could not start ar.');
+        alert('Could not start AR.');
       }
     });
   </script>
