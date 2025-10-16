@@ -6,59 +6,66 @@
   <title>WebXR + three.js AR</title>
   <style>
     body { margin:0; overflow:hidden; }
-    #enter-ar { position:absolute; bottom:20px; left:50%; transform:translateX(-50%); padding:10px 20px; background:#fff; }
   </style>
 </head>
 <body>
-  <button id="enter-ar">Enter AR</button>
   <script type="module">
-    import * as THREE from 'https://unpkg.com/three@0.153.0/build/three.module.js';
-    import { GLTFLoader } from 'https://unpkg.com/three@0.153.0/examples/jsm/loaders/GLTFLoader.js';
-    import { ARButton } from 'https://unpkg.com/three@0.153.0/examples/jsm/webxr/ARButton.js';
+    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.153.0/build/three.module.js';
+    import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.153.0/examples/jsm/loaders/GLTFLoader.js';
+    import { ARButton } from 'https://cdn.jsdelivr.net/npm/three@0.153.0/examples/jsm/webxr/ARButton.js';
 
     let camera, scene, renderer;
     let reticle, hitTestSource = null, hitTestSourceRequested = false;
-    let model = null;
+    let model = null, controller = null;
 
     function init() {
-      // renderer
       renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
       renderer.setPixelRatio(window.devicePixelRatio);
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.xr.enabled = true;
+      renderer.domElement.style.touchAction = 'none';
       document.body.appendChild(renderer.domElement);
 
-      // camera & scene
       scene = new THREE.Scene();
       camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
 
-      // light
-      const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
-      scene.add(light);
+      scene.add(new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1));
 
-      // reticle (to visualize where AR surface is)
       const geometry = new THREE.RingGeometry(0.08, 0.1, 32).rotateX(-Math.PI / 2);
-      const material = new THREE.MeshBasicMaterial({ color: 0x0fff0, side: THREE.DoubleSide });
+      const material = new THREE.MeshBasicMaterial({ color: 0x00fff0, side: THREE.DoubleSide });
       reticle = new THREE.Mesh(geometry, material);
       reticle.matrixAutoUpdate = false;
       reticle.visible = false;
       scene.add(reticle);
 
-      // load model but don’t add to scene yet
       const loader = new GLTFLoader();
-      loader.load('./assets/avatar.glb', gltf => {
+      loader.load('./assets/avatar.glb', (gltf) => {
         model = gltf.scene;
-        model.scale.set(0.5, 0.5, 0.5);  // scale it appropriately
-      }, undefined, err => {
-        console.error('Error loading glb:', err);
-      });
+        model.scale.set(0.5, 0.5, 0.5);
+      }, undefined, (err) => console.error('Error loading glb:', err));
 
-      // AR button / session
       const btn = ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] });
       document.body.appendChild(btn);
 
-      // render loop
+      controller = renderer.xr.getController(0);
+      controller.addEventListener('select', () => {
+        if (!reticle.visible || !model) return;
+        const placed = model.parent ? model.clone(true) : model;
+        placed.position.setFromMatrixPosition(reticle.matrix);
+        placed.quaternion.setFromRotationMatrix(reticle.matrix);
+        scene.add(placed);
+      });
+      scene.add(controller);
+
+      window.addEventListener('resize', onWindowResize, false);
+
       renderer.setAnimationLoop(render);
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
     }
 
     init();
@@ -69,15 +76,17 @@
         const session = renderer.xr.getSession();
 
         if (!hitTestSourceRequested) {
-          session.requestReferenceSpace('viewer').then(rs => {
-            return session.requestHitTestSource({ space: rs });
-          }).then(source => {
-            hitTestSource = source;
-          });
+          session.requestReferenceSpace('viewer')
+            .then((viewerSpace) => session.requestHitTestSource({ space: viewerSpace }))
+            .then((source) => { hitTestSource = source; })
+            .catch(console.error);
+
           session.addEventListener('end', () => {
             hitTestSourceRequested = false;
             hitTestSource = null;
+            reticle.visible = false;
           });
+
           hitTestSourceRequested = true;
         }
 
@@ -86,19 +95,14 @@
           if (hitTestResults.length > 0) {
             const hit = hitTestResults[0];
             const pose = hit.getPose(referenceSpace);
-            reticle.visible = true;
-            reticle.matrix.fromArray(pose.transform.matrix);
+            if (pose) {
+              reticle.visible = true;
+              reticle.matrix.fromArray(pose.transform.matrix);
+            } else {
+              reticle.visible = false;
+            }
           } else {
             reticle.visible = false;
-          }
-        }
-
-        // when user taps screen, place model
-        renderer.domElement.onclick = () => {
-          if (reticle.visible && model) {
-            model.position.setFromMatrixPosition(reticle.matrix);
-            model.quaternion.setFromRotationMatrix(reticle.matrix);
-            scene.add(model);
           }
         }
       }
