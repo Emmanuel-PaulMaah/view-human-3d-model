@@ -2,114 +2,23 @@
 <html lang="en">
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>WebXR AR: GLB Loader</title>
+<title>GLB Preview with model-viewer</title>
 
-<body style="margin:0; overflow:hidden;">
-<script type="module">
-// [1] Import three.js core, a GLB loader, and a helper that creates the AR button.
-import * as THREE from 'https://unpkg.com/three@0.160/build/three.module.js';
-import { GLTFLoader } from 'https://unpkg.com/three@0.160/examples/jsm/loaders/GLTFLoader.js';
-import { ARButton } from 'https://unpkg.com/three@0.160/examples/jsm/webxr/ARButton.js';
+<!-- model-viewer web component -->
+<script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
 
-// [2] Create a transparent WebGL renderer so the camera feed shows behind the 3D.
-const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-// [3] Match the canvas to the window.
-renderer.setSize(window.innerWidth, window.innerHeight);
-// [4] Enable WebXR on the renderer to allow AR sessions.
-renderer.xr.enabled = true;
-// [5] Add the canvas to the DOM.
-document.body.appendChild(renderer.domElement);
-
-// [6] Ask the browser for an AR session with hit-test and optional features.
-const sessionInit = {
-  requiredFeatures: ['hit-test'],
-  optionalFeatures: ['dom-overlay','light-estimation'],
-  domOverlay: { root: document.body }
-};
-// [7] Insert a button that starts/stops the AR session using those features.
-document.body.appendChild(ARButton.createButton(renderer, sessionInit));
-
-// [8] Set up a scene. Background stays transparent for passthrough camera.
-const scene = new THREE.Scene();
-// [9] A camera is required by three.js even though WebXR drives it.
-const camera = new THREE.PerspectiveCamera();
-
-// [10] Add simple lighting in case the model needs it. Works without shadows.
-const light = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
-scene.add(light);
-
-// [11] Create a small reticle to show where hits land.
-const reticleGeo = new THREE.RingGeometry(0.06, 0.07, 32).rotateX(-Math.PI/2);
-const reticleMat = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-const reticle = new THREE.Mesh(reticleGeo, reticleMat);
-reticle.matrixAutoUpdate = false;
-reticle.visible = false;
-scene.add(reticle);
-
-// [12] Placeholder for the loaded avatar.
-let avatar = null;
-
-// [13] Load your GLB model. Path must be reachable over HTTPS.
-new GLTFLoader().load('./assets/avatar.glb', (gltf) => {
-  avatar = gltf.scene;
-  avatar.visible = false;              // hide until placed
-  avatar.traverse(o => { if (o.isMesh) o.frustumCulled = false; }); // avoid popping if large
-  avatar.scale.setScalar(1.0);         // adjust size as needed
-  scene.add(avatar);
-});
-
-// [14] WebXR handles and state for hit-testing.
-let xrRefSpace = null;
-let hitTestSource = null;
-
-// [15] When an AR session starts, set up references and request a hit-test source.
-renderer.xr.addEventListener('sessionstart', async () => {
-  const session = renderer.xr.getSession();                 // get active XRSession
-  xrRefSpace = await session.requestReferenceSpace('local'); // stable room-space
-  const viewerSpace = await session.requestReferenceSpace('viewer'); // device space
-  hitTestSource = await session.requestHitTestSource({ space: viewerSpace }); // cast rays from device
-});
-
-// [16] If the session ends, drop the hit-test source.
-renderer.xr.addEventListener('sessionend', () => {
-  hitTestSource = null;
-  xrRefSpace = null;
-  reticle.visible = false;
-});
-
-// [17] Handle resize to keep the canvas fitting the screen.
-window.addEventListener('resize', () => {
-  renderer.setSize(window.innerWidth, window.innerHeight);
-});
-
-// [18] Per-frame loop driven by WebXR when in session, otherwise regular render loop.
-renderer.setAnimationLoop((t, frame) => {
-  // [19] If not in AR frame yet, just render the scene.
-  if (!frame || !xrRefSpace) { renderer.render(scene, camera); return; }
-
-  // [20] Get hit-test results for the current frame.
-  const hits = hitTestSource ? frame.getHitTestResults(hitTestSource) : [];
-
-  // [21] If we have a hit, position the reticle and optionally the avatar.
-  if (hits.length) {
-    const pose = hits[0].getPose(xrRefSpace);               // hit pose in room space
-    reticle.visible = true;
-    reticle.matrix.fromArray(pose.transform.matrix);         // reticle follows surface
-
-    // [22] On the first valid hit, drop the avatar onto that pose.
-    if (avatar && !avatar.visible) {
-      avatar.visible = true;
-      const m = new THREE.Matrix4().fromArray(pose.transform.matrix);
-      avatar.position.setFromMatrixPosition(m);
-      avatar.quaternion.setFromRotationMatrix(m);
-    }
-  } else {
-    reticle.visible = false; // [23] hide reticle if no surface found
-  }
-
-  // [24] Render the current frame.
-  renderer.render(scene, camera);
-});
-</script>
+<body style="margin:0; background:#111;">
+<model-viewer
+  src="./assets/avatar.glb"
+  camera-controls
+  ar
+  ar-modes="webxr scene-viewer quick-look"
+  ar-scale="fixed"
+  ar-placement="floor"
+  autoplay
+  shadow-intensity="1"
+  exposure="1"
+  style="width:100vw;height:100vh;outline:none;"
+></model-viewer>
 </body>
 </html>
